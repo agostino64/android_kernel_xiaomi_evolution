@@ -189,8 +189,12 @@ static int ufsf_read_desc(struct ufs_hba *hba, u8 desc_id, u8 desc_index,
 			  u8 selector, u8 *desc_buf, u32 size)
 {
 	int err = 0;
+	bool pm_resumed = false;
 
-	pm_runtime_get_sync(hba->dev);
+	if (!hba->pm_op_in_progress) {
+		pm_runtime_get_sync(hba->dev);
+		pm_resumed = true;
+	}
 
 	err = ufshcd_query_descriptor_retry(hba, UPIU_QUERY_OPCODE_READ_DESC,
 					    desc_id, desc_index,
@@ -199,7 +203,8 @@ static int ufsf_read_desc(struct ufs_hba *hba, u8 desc_id, u8 desc_index,
 	if (err)
 		ERR_MSG("reading Device Desc failed. err = %d", err);
 
-	pm_runtime_put_sync(hba->dev);
+	if (pm_resumed)
+		pm_runtime_put_sync(hba->dev);
 
 	return err;
 }
