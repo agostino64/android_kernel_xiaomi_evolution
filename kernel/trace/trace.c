@@ -12,7 +12,7 @@
  *  Copyright (C) 2004 Nadia Yvette Chambers
  */
 
-#define DEBUG 1
+#define DEBUG 0
 
 #include <linux/ring_buffer.h>
 #include <generated/utsrelease.h>
@@ -2894,6 +2894,9 @@ static int buffers_allocated;
 
 void trace_printk_init_buffers(void)
 {
+#ifdef CONFIG_DISABLE_TRACE_PRINTK
+	buffers_allocated = 0;
+#else
 	if (buffers_allocated)
 		return;
 
@@ -2931,6 +2934,7 @@ void trace_printk_init_buffers(void)
 	 */
 	if (global_trace.trace_buffer.buffer)
 		tracing_start_cmdline_record();
+#endif
 }
 
 void trace_printk_start_comm(void)
