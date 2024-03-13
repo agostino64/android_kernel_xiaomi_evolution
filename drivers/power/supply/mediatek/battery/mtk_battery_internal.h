@@ -53,7 +53,7 @@
 #define SHUTDOWN_TIME 40
 #define AVGVBAT_ARRAY_SIZE 15 /* changed for too low shutdown voltage on 20210224 */
 #define INIT_VOLTAGE 3450
-#define BATTERY_SHUTDOWN_TEMPERATURE 70
+#define BATTERY_SHUTDOWN_TEMPERATURE 60
 
 /* ============================================================ */
 /* typedef and Struct*/

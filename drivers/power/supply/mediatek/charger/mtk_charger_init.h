@@ -16,7 +16,7 @@
 #define __MTK_CHARGER_INIT_H__
 
 #define BATTERY_CV 4350000
-#define V_CHARGER_MAX 10500000 /* 10.5 V */
+#define V_CHARGER_MAX 8000000 /* 8.0 V */
 #define V_CHARGER_MIN 4600000 /* 4.6 V */
 
 #define USB_CHARGER_CURRENT_SUSPEND		0 /* def CONFIG_USB_IF */
