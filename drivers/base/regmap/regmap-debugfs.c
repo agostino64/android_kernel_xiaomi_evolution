@@ -41,6 +41,7 @@ static ssize_t regmap_name_read_file(struct file *file,
 				     loff_t *ppos)
 {
 	struct regmap *map = file->private_data;
+	const char *name = "nodev";
 	int ret;
 	char *buf;
 
@@ -48,7 +49,10 @@ static ssize_t regmap_name_read_file(struct file *file,
 	if (!buf)
 		return -ENOMEM;
 
-	ret = snprintf(buf, PAGE_SIZE, "%s\n", map->dev->driver->name);
+	if (map->dev && map->dev->driver)
+		name = map->dev->driver->name;
+
+	ret = snprintf(buf, PAGE_SIZE, "%s\n", name);
 	if (ret < 0) {
 		kfree(buf);
 		return ret;
