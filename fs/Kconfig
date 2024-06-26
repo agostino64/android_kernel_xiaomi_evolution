@@ -17,12 +17,6 @@ source "fs/ext2/Kconfig"
 source "fs/ext4/Kconfig"
 source "fs/jbd2/Kconfig"
 
-config DYNAMIC_FSYNC
-	bool "dynamic file sync control"
-	default y
-	help
-	  An experimental file sync control using new power_suspend driver 
-	  
 config FS_MBCACHE
 # Meta block cache for Extended Attributes (ext2/ext3/ext4)
 	tristate
