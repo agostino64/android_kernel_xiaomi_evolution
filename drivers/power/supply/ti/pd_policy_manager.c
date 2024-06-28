@@ -28,13 +28,13 @@
 #include <linux/power/mtk_intf_mi.h>
 #include <mt-plat/charger_class.h>
 #include <mt-plat/mtk_charger.h>
-
+#include "../../../misc/mediatek/typec/tcpc/inc/tcpm.h"
 #define PD_SRC_PDO_TYPE_FIXED		0
 #define PD_SRC_PDO_TYPE_BATTERY		1
 #define PD_SRC_PDO_TYPE_VARIABLE	2
 #define PD_SRC_PDO_TYPE_AUGMENTED	3
 
-#define BATT_MAX_CHG_VOLT		4480
+#define BATT_MAX_CHG_VOLT		4460
 #define BATT_FAST_CHG_CURR		6000
 #define BUS_MIVR_THRESHOLD		4200
 #define	BUS_OVP_THRESHOLD		12000
@@ -46,12 +46,15 @@
 #define BAT_CURR_LOOP_LMT		BATT_FAST_CHG_CURR
 #define BUS_VOLT_LOOP_LMT		BUS_OVP_THRESHOLD
 
-#define PM_WORK_RUN_NORMAL_INTERVAL		500
-#if defined(CONFIG_KERNEL_CUSTOM_FACTORY)
+
+#if defined(CONFIG_KERNEL_CUSTOM_FACTORY) // factory FAMMI test
 #define PM_WORK_RUN_QUICK_INTERVAL		100
+#define PM_WORK_RUN_NORMAL_INTERVAL		300
 #else
 #define PM_WORK_RUN_QUICK_INTERVAL		200
+#define PM_WORK_RUN_NORMAL_INTERVAL		300
 #endif
+
 enum {
 	PM_ALGO_RET_OK,
 	PM_ALGO_RET_THERM_FAULT,
@@ -78,7 +81,7 @@ static struct pdpm_config pm_config = {
 	.bus_volt_lp_lmt		= BUS_VOLT_LOOP_LMT,
 	.bus_curr_lp_lmt		= BAT_CURR_LOOP_LMT >> 1,
 
-	.fc2_taper_current		= 2100,
+	.fc2_taper_current		= 2300,
 	.fc2_steps			= 1,
 
 	.min_adapter_volt_required	= 10000,
@@ -101,154 +104,6 @@ struct charger_device *ch2_dev = NULL;
 static struct charger_consumer *chg_consumer = NULL;
 
 static int usbpd_pm_check_cp_enabled(struct usbpd_pm *pdpm);
-
-bool bq2597x_load = false;
-bool ln8000_load = false;
-void set_bq2597x_load_flag(bool bqflag)
-{
-	bq2597x_load = bqflag;
-}
-bool get_bq2597x_load_flag(void)
-{
-	return bq2597x_load;
-}
-void set_ln8000_load_flag(bool lnflag)
-{
-	ln8000_load = lnflag;
-}
-bool get_ln8000_load_flag(void)
-{
-	return ln8000_load;
-}
-EXPORT_SYMBOL(set_bq2597x_load_flag);
-EXPORT_SYMBOL(get_bq2597x_load_flag);
-EXPORT_SYMBOL(set_ln8000_load_flag);
-EXPORT_SYMBOL(get_ln8000_load_flag);
-/* 2021.01.21 longcheer jiangshitian change for mic noise begin */
-#if defined(CONFIG_HS_MIC_RECORD_NOISE_PD_CHG)
-bool mic_exist = false; // true: mic plugin  false: mic plugout; default false
-bool chg_exist = false; // true: charge plugin  false: charge plugout; default false
-bool mic_chg_exist = false;//ture:mic and chg both plug in  false:not both plug in; default false
-bool need_switch_IC = false;//true:need switch IC;false:do not need switch IC
-SWITCH_CHG_IC enum_switch_CHG_IC = CHG_TYPE_NONE;
-
-/* boot type definitions */
-typedef enum {
-	NORMAL_BOOT = 0,
-	META_BOOT = 1,
-	RECOVERY_BOOT = 2,
-	SW_REBOOT = 3,
-	FACTORY_BOOT = 4,
-	ADVMETA_BOOT = 5,
-	ATE_FACTORY_BOOT = 6,
-	ALARM_BOOT = 7,
-	KERNEL_POWER_OFF_CHARGING_BOOT = 8,
-	LOW_POWER_OFF_CHARGING_BOOT = 9,
-	FASTBOOT = 99,
-	DOWNLOAD_BOOT = 100,
-	UNKNOWN_BOOT
-} BOOTMODE;
-
-static void set_mic_exist_flag(bool micflag)
-{
-	mic_exist = micflag;
-}
-
-static void set_switch_IC_flag(bool needswitch)
-{
-	need_switch_IC = needswitch;
-}
-
-static bool get_switch_IC_flag(void)
-{
-	return need_switch_IC;
-}
-
-void set_chg_exist_flag(bool chgflag)
-{
-	chg_exist = chgflag;
-}
-
-bool get_chg_exist_flag(void)
-{
-	return chg_exist;
-}
-
-static bool get_mic_chg_exist_flag(void)
-{
-	if((true == mic_exist)&&(true == chg_exist))
-	{
-		mic_chg_exist = true;
-	}
-	else
-	{
-		mic_chg_exist = false;
-	}
-
-	return mic_chg_exist;
-}
-
-
-EXPORT_SYMBOL(set_chg_exist_flag);
-EXPORT_SYMBOL(get_chg_exist_flag);
-
-static bool kpoc_charge_check(void)
-{
-	unsigned int boot_mode = get_boot_mode();
-
-	if (boot_mode == KERNEL_POWER_OFF_CHARGING_BOOT
-	    || boot_mode == LOW_POWER_OFF_CHARGING_BOOT) {
-		return true;
-	}
-
-	return false;
-}
-
-static bool enable_switch_charge_PD(void)
-{
-	bool enable = true;
-	#if defined(CONFIG_TARGET_PROJECT_K7B)
-	if(0 == get_board_new_version())
-	#endif
-	{
-		pr_info("%s  %d  get_mic_chg_exist_flag=%d enum_switch_CHG_IC=%d......\n", __func__, __LINE__,get_mic_chg_exist_flag(),enum_switch_CHG_IC);
-		if(kpoc_charge_check())
-		{
-			enable = true;
-		}
-		else
-		{
-			if(true == get_mic_chg_exist_flag())
-			{
-				enable = false;
-				enum_switch_CHG_IC = CHG_TYPE_NORMAL;
-			}
-			else
-			{
-				enable = true;
-				enum_switch_CHG_IC = CHG_TYPE_PD;
-			}
-		}
-	}
-	return enable;
-}
-
-void switch_charge_IC_GPL(bool micflag) //micflag=1: mic plugin  micflag=0: mic plugout
-{
-	pr_info("%s  %d  get_board_new_version = %d......\n", __func__, __LINE__, get_board_new_version());
-#if defined(CONFIG_TARGET_PROJECT_K7B)
-	if(0 == get_board_new_version())
-#endif
-	{
-		set_mic_exist_flag(micflag);
-		set_switch_IC_flag(true);
-	}
-}
-EXPORT_SYMBOL(switch_charge_IC_GPL);
-
-#endif
-/* 2021.01.21 longcheer jiangshitian change for mic noise end */
-
 static void usbpd_check_usb_psy(struct usbpd_pm *pdpm)
 {
 	if (!pdpm->usb_psy) {
@@ -384,7 +239,7 @@ static bool pd_disable_cp_by_jeita_status(struct usbpd_pm *pdpm)
 	if (!pdpm->bms_psy)
 		return false;
 
-	rc = power_supply_get_property(pdpm->bms_psy,
+	rc = power_supply_get_property(pdpm->sw_psy,
 				POWER_SUPPLY_PROP_TEMP, &pval);
 	if (rc < 0) {
 		pr_info("Couldn't get batt temp prop:%d\n", rc);
@@ -536,18 +391,13 @@ static int usbpd_set_new_fcc_voter(struct usbpd_pm *pdpm)
 static void usbpd_check_cp_psy(struct usbpd_pm *pdpm)
 {
 	if (!pdpm->cp_psy) {
-		if(get_bq2597x_load_flag())
-		{
-			pr_info("bq2597x usbpd_check_cp_psy\n");
-			if (pm_config.cp_sec_enable)
-				pdpm->cp_psy = power_supply_get_by_name("bq2597x-master");
-			else
-				pdpm->cp_psy = power_supply_get_by_name("bq2597x-standalone");
-		}
-		else if(get_ln8000_load_flag())
-		{
-			pr_info("ln8000 usbpd_check_cp_psy\n");
-			pdpm->cp_psy = power_supply_get_by_name("ln8000");
+		pr_info("bq2597x usbpd_check_cp_psy\n");
+		if (pm_config.cp_sec_enable) {
+			pdpm->cp_psy = power_supply_get_by_name("bq2597x-master");
+			pr_info("bq2597x usbpd_check_cp_psy bq2597x-master\n");
+		} else {
+			pdpm->cp_psy = power_supply_get_by_name("bq2597x-standalone");
+			pr_info("bq2597x usbpd_check_cp_psy bq2597x-standalone\n");
 		}
 		if (!pdpm->cp_psy)
 			pr_err("cp_psy not found\n");
@@ -813,7 +663,7 @@ static int usbpd_pm_enable_cp(struct usbpd_pm *pdpm, bool enable)
 	if ((!ret) && (ch1_dev)) {
 		charger_dev_enable(ch1_dev, !enable);
 		if (!enable) {
-			charger_dev_set_input_current(ch1_dev, mincurrent); //2020.12.18 longcheer jiangshitian edit for sc/bq pps current limited
+			charger_dev_set_input_current(ch1_dev, mincurrent);
 		}
 	}
 
@@ -842,7 +692,7 @@ static int usbpd_pm_check_cp_enabled(struct usbpd_pm *pdpm)
 	int ret;
 	union power_supply_propval val = {0,}, fastcharge_limit = {0,};
 	u32 mincurrent;
-	
+
 	usbpd_check_cp_psy(pdpm);
 	usbpd_check_usb_psy(pdpm);
 	if (pdpm->sw_psy) {
@@ -864,11 +714,12 @@ static int usbpd_pm_check_cp_enabled(struct usbpd_pm *pdpm)
 			POWER_SUPPLY_PROP_CHARGING_ENABLED, &val);
 	if (!ret) {
 		pdpm->cp.charge_enabled = !!val.intval;
-		// bq is disabled, then open 6360
+		// bq is disabled, then open MAIN_CHARGER
 		if ((pdpm->cp.charge_enabled == 0) && (ch1_dev) && (chg_consumer)) {
 			charger_dev_enable(ch1_dev, !pdpm->cp.charge_enabled);
+			pr_info("%s charger_dev_enable_powerpath enable:%d\n", __func__, !pdpm->cp.charge_enabled);
 			charger_manager_enable_power_path(chg_consumer, MAIN_CHARGER, !pdpm->cp.charge_enabled);
-			charger_dev_set_input_current(ch1_dev, mincurrent); //2020.12.18 longcheer jiangshitian edit for sc/bq pps current limited
+			charger_dev_set_input_current(ch1_dev, mincurrent);
 		}
 	}
 
@@ -1017,13 +868,16 @@ static int usbpd_pm_enable_sw(struct usbpd_pm *pdpm, bool enable)
 {
 	int ret;
 
-	if (!pdpm->sw_psy) {
-		pdpm->sw_psy = power_supply_get_by_name("battery");
-		if (!pdpm->sw_psy)
-			return -ENODEV;
+	if (!ch1_dev) {
+        ch1_dev = get_charger_by_name("primary_chg");
+        if (!ch1_dev)
+		return -ENODEV;
 	}
 
-	pdpm->sw.charge_enabled = enable;
+	ret = charger_dev_enable(ch1_dev,enable);
+    if(ret<0){
+        pr_err("fail to set main charger %d\n",enable);
+    }
 	return ret;
 }
 
@@ -1050,6 +904,7 @@ static void usbpd_pm_evaluate_src_caps(struct usbpd_pm *pdpm)
 {
 	struct pps_cap_bq cap;
 	int ret = 0, i = 0, retry_cnt = 0;
+	union power_supply_propval pval = {0, };
 
 	pr_debug("%s enter.\n", __func__);
 
@@ -1140,7 +995,7 @@ static int usbpd_pm_fc2_charge_algo(struct usbpd_pm *pdpm)
 		pm_config.bat_volt_lp_lmt = pdpm->bat_volt_max;
 	else
 		pm_config.bat_volt_lp_lmt = pdpm->non_ffc_bat_volt_max;
-
+        pr_info("bat_volt_lp_lmt=%d\n",pm_config.bat_volt_lp_lmt);
 	usbpd_set_new_fcc_voter(pdpm);
 
 	effective_fcc_val = usbpd_get_effective_fcc_val(pdpm);
@@ -1329,6 +1184,49 @@ static void usbpd_pm_move_state(struct usbpd_pm *pdpm, enum pm_state state)
 	pdpm->state = state;
 }
 
+// Add for Xiaomi lite charge apapter
+static void usbpd_get_pps_status_max(struct usbpd_pm *pdpm)
+{
+	int ret, apdo_idx = -1;
+	struct tcpm_power_cap_val apdo_cap = {0};
+	u8 cap_idx;
+	//u32 vta_meas, ita_meas, prog_mv;
+
+	/* select TA boundary */
+	cap_idx = 0;
+
+	if (!pdpm->tcpc) {
+		pdpm->tcpc = tcpc_dev_get_by_name("type_c_port0");
+		if (!pdpm->tcpc) {
+		pr_err("get tcpc dev fail\n");
+		}
+	}
+	while (1) {
+		ret = tcpm_inquire_pd_source_apdo(pdpm->tcpc,
+			TCPM_POWER_CAP_APDO_TYPE_PPS,
+			&cap_idx, &apdo_cap);
+		if (ret != TCP_DPM_RET_SUCCESS) {
+			pr_err("inquire pd apdo fail(%d)\n", ret);
+			break;
+		}
+
+		pr_info("cap_idx[%d], %d mv ~ %d mv, %d ma, pl: %d\n", cap_idx,
+			 apdo_cap.min_mv, apdo_cap.max_mv, apdo_cap.ma,
+			 apdo_cap.pwr_limit);
+
+		if (apdo_cap.max_mv < pm_config.min_adapter_volt_required ||
+			apdo_cap.ma < pm_config.min_adapter_curr_required)
+			continue;
+		if (apdo_idx == -1) {
+			apdo_idx = cap_idx;
+			pr_info("select potential cap_idx[%d]\n", cap_idx);
+			pdpm->apdo_max_volt = apdo_cap.max_mv;
+			pdpm->apdo_max_curr = apdo_cap.ma;
+		}
+	}
+}
+// End add
+
 static int usbpd_pm_sm(struct usbpd_pm *pdpm)
 {
 	int ret, rc = 0;
@@ -1347,6 +1245,9 @@ static int usbpd_pm_sm(struct usbpd_pm *pdpm)
 		stop_sw = false;
 		recover = false;
 
+		// Add for Xiaomi lite charge adapter
+		usbpd_get_pps_status_max(pdpm);
+		// End add
 		pd_get_batt_current_thermal_level(pdpm, &thermal_level);
 		pdpm->is_temp_out_fc2_range = pd_disable_cp_by_jeita_status(pdpm);
 		pr_info("is_temp_out_fc2_range:%d\n", pdpm->is_temp_out_fc2_range);
@@ -1383,9 +1284,12 @@ static int usbpd_pm_sm(struct usbpd_pm *pdpm)
 			pd_set_bq_charge_done(pdpm, true);
 			pr_info("hv charge disbale, waiting...\n");
 		} else {
-			pd_set_bq_charge_done(pdpm, false);
-			if (ch1_dev)
+			if (ch1_dev) {
+				pr_info("enter CP,disable maincharger termination\n");
+				charger_dev_enable_termination(ch1_dev,false);
 				charger_dev_set_input_current(ch1_dev, 100000);
+			}
+                        pd_set_bq_charge_done(pdpm, false);
 			pr_info("batt_volt-%d is ok, start flash charging\n",
 					pdpm->cp.vbat_volt);
 			usbpd_pm_move_state(pdpm, PD_PM_STATE_FC2_ENTRY);
@@ -1394,10 +1298,7 @@ static int usbpd_pm_sm(struct usbpd_pm *pdpm)
 
 	case PD_PM_STATE_FC2_ENTRY:
 		if (pm_config.fc2_disable_sw) {
-			if (pdpm->sw.charge_enabled) {
-				usbpd_pm_enable_sw(pdpm, false);
-				usbpd_pm_check_sw_enabled(pdpm);
-			}
+			usbpd_pm_enable_sw(pdpm, false);
 			if (!pdpm->sw.charge_enabled)
 				usbpd_pm_move_state(pdpm, PD_PM_STATE_FC2_ENTRY_1);
 		} else {
@@ -1410,12 +1311,14 @@ static int usbpd_pm_sm(struct usbpd_pm *pdpm)
 		if (pdpm->cp.sc8551_bypass_charge_enable == 1
 				&& pdpm->cp.sc8551_charge_mode == SC8551_CHARGE_MODE_BYPASS) {
 			curr_ibus_lmt = curr_fcc_lmt;
-			pdpm->request_voltage = pdpm->cp.vbat_volt + BUS_VOLT_INIT_UP / 2;
+//			pdpm->request_voltage = pdpm->cp.vbat_volt + BUS_VOLT_INIT_UP / 2;
+			pdpm->request_voltage = pdpm->cp.vbat_volt *107/100;
 			pdpm->request_current = min(pdpm->apdo_max_curr, curr_ibus_lmt);
 			pdpm->request_current = min(pdpm->request_current, MAX_BYPASS_CURRENT_MA);
 		} else {
 			curr_ibus_lmt = curr_fcc_lmt >> 1;
-			pdpm->request_voltage = pdpm->cp.vbat_volt * 2 + BUS_VOLT_INIT_UP;
+//			pdpm->request_voltage = pdpm->cp.vbat_volt * 2 + BUS_VOLT_INIT_UP;
+			pdpm->request_voltage = pdpm->cp.vbat_volt *213/100;
 			pdpm->request_current = min(pdpm->apdo_max_curr, curr_ibus_lmt);
 		}
 
@@ -1447,21 +1350,8 @@ static int usbpd_pm_sm(struct usbpd_pm *pdpm)
 					ret = charger_dev_is_powerpath_enabled(ch1_dev, &is_ch1_pwr_path_en);
 				}
 				if (ret >= 0 && is_ch1_pwr_path_en) {
-					pr_info("PD_PM_STATE_FC2_ENTRY_2: vbus too low while main charger working, disable it\n");
-				/* 2021.01.21 longcheer jiangshitian change for mic noise begin */
-				#if defined(CONFIG_HS_MIC_RECORD_NOISE_PD_CHG)
-					if(!enable_switch_charge_PD())
-					{
-						usbpd_pm_enable_cp(pdpm, false);
-					}
-					else
-					{
-						usbpd_pm_enable_cp(pdpm, true);
-					}
-				#else
+					pr_err("PD_PM_STATE_FC2_ENTRY_2: vbus too low while main charger working, disable it\n");
 					usbpd_pm_enable_cp(pdpm, true);
-				#endif
-				/* 2021.01.21 longcheer jiangshitian change for mic noise end */
 					usbpd_pm_check_cp_enabled(pdpm);
 				}
 			}
@@ -1495,21 +1385,8 @@ static int usbpd_pm_sm(struct usbpd_pm *pdpm)
 		}
 
 		if (!pdpm->cp.charge_enabled) {
-		/* 2021.01.21 longcheer jiangshitian change for mic noise begin */
-		#if defined(CONFIG_HS_MIC_RECORD_NOISE_PD_CHG)
-			if(!enable_switch_charge_PD())
-			{
-				usbpd_pm_enable_cp(pdpm, false);
-			}
-			else
-			{
-				usbpd_pm_enable_cp(pdpm, true);
-			}
-		#else
 			usbpd_pm_enable_cp(pdpm, true);
-		#endif
-		/* 2021.01.21 longcheer jiangshitian change for mic noise end */
-			msleep(30);
+			msleep(100);
 			usbpd_pm_check_cp_enabled(pdpm);
 		}
 
@@ -1517,20 +1394,8 @@ static int usbpd_pm_sm(struct usbpd_pm *pdpm)
 			if ((pm_config.cp_sec_enable && pdpm->cp_sec.charge_enabled)
 					|| !pm_config.cp_sec_enable) {
 				pd_set_bq_charge_done(pdpm, false);
-			/* 2021.01.21 longcheer jiangshitian change for mic noise begin */
-			#if defined(CONFIG_HS_MIC_RECORD_NOISE_PD_CHG)
-				if(!enable_switch_charge_PD())
-				{
-					usbpd_pm_enable_cp(pdpm, false);
-				}
-				else
-				{
-					usbpd_pm_enable_cp(pdpm, true);
-				}
-			#else
 				usbpd_pm_enable_cp(pdpm, true);
-			#endif
-			/* 2021.01.21 longcheer jiangshitian change for mic noise end */
+				msleep(100);
 				usbpd_pm_check_cp_enabled(pdpm);
 				usbpd_pm_move_state(pdpm, PD_PM_STATE_FC2_TUNE);
 				ibus_lmt_change_timer = 0;
@@ -1540,16 +1405,6 @@ static int usbpd_pm_sm(struct usbpd_pm *pdpm)
 		break;
 
 	case PD_PM_STATE_FC2_TUNE:
-		/* 2021.01.21 longcheer jiangshitian change for mic noise begin */
-		#if defined(CONFIG_HS_MIC_RECORD_NOISE_PD_CHG)
-			if(get_switch_IC_flag())
-			{
-				usbpd_pm_move_state(pdpm, PD_PM_STATE_ENTRY);
-				set_switch_IC_flag(false);
-				break;
-			}
-		#endif
-		/* 2021.01.21 longcheer jiangshitian change for mic noise end */
 		usbpd_update_pps_status(pdpm);
 
 		ret = usbpd_pm_fc2_charge_algo(pdpm);
@@ -1569,6 +1424,10 @@ static int usbpd_pm_sm(struct usbpd_pm *pdpm)
 			usbpd_pm_move_state(pdpm, PD_PM_STATE_FC2_EXIT);
 			break;
 		} else {
+			// Add for Xiaomi lite charge adapter
+			usbpd_get_pps_status_max(pdpm);
+			pdpm->request_current = min(pdpm->apdo_max_curr, pm_config.bus_curr_lp_lmt);
+			// End
 			adapter_set_cap_bq(pdpm->request_voltage, pdpm->request_current);
 			pr_info("request_voltage:%d, request_current:%d\n",
 					pdpm->request_voltage, pdpm->request_current);
@@ -1616,10 +1475,16 @@ static int usbpd_pm_sm(struct usbpd_pm *pdpm)
 
 		usbpd_pm_check_sw_enabled(pdpm);
 
+
 		if (recover)
 			usbpd_pm_move_state(pdpm, PD_PM_STATE_ENTRY);
 		else
 			rc = 1;
+
+		if (ch1_dev) {
+			charger_dev_enable_termination(ch1_dev,true);
+			pr_info("exit CP,enable maincharger termination\n");
+		}
 
 		break;
 	default:
@@ -1651,53 +1516,22 @@ static void usbpd_pm_workfunc(struct work_struct *work)
 		}
 		pdpm->pd_verified_checked = true;
 	}
-#if defined(CONFIG_KERNEL_CUSTOM_FACTORY)
-	if (!usbpd_pm_sm(pdpm) && pdpm->pd_active) {
-		if (pdpm->cp.vbat_volt >= HIGH_VOL_THR_MV)
-			internal = PM_WORK_RUN_QUICK_INTERVAL;
-		else
-			internal = PM_WORK_RUN_QUICK_INTERVAL;
-		schedule_delayed_work(&pdpm->pm_work,
-				msecs_to_jiffies(internal));
-	}
-#else
-	if (!usbpd_pm_sm(pdpm) && pdpm->pd_active) {
-		if (pdpm->cp.vbat_volt >= HIGH_VOL_THR_MV)
-			internal = PM_WORK_RUN_QUICK_INTERVAL;
-		else
-		{
-			/* 2021.02.20 longcheer jiangshitian change for mic noise begin */
-			#if defined(CONFIG_HS_MIC_RECORD_NOISE_PD_CHG)
-				if(!enable_switch_charge_PD())
-				{
-					internal = (PM_WORK_RUN_NORMAL_INTERVAL - 200);
-				}
-				else
-				{
-					internal = PM_WORK_RUN_NORMAL_INTERVAL;
-				}
-			#else
-				internal = PM_WORK_RUN_NORMAL_INTERVAL;
-			#endif
-			/* 2021.02.20 longcheer jiangshitian change for mic noise end */
-		}
-		schedule_delayed_work(&pdpm->pm_work,
-				msecs_to_jiffies(internal));
-	}
-#endif
 
+	if (!usbpd_pm_sm(pdpm) && pdpm->pd_active) {
+		if (pdpm->cp.vbat_volt >= HIGH_VOL_THR_MV)
+			internal = PM_WORK_RUN_QUICK_INTERVAL;
+		else
+			internal = PM_WORK_RUN_NORMAL_INTERVAL;
+		schedule_delayed_work(&pdpm->pm_work,
+				msecs_to_jiffies(internal));
+	}
 }
 
 static void usbpd_pm_disconnect(struct usbpd_pm *pdpm)
 {
 	int ret;
 	union power_supply_propval val = {0,};
-
-	/* 2021.01.21 longcheer jiangshitian change for mic noise begin */
-	#if defined(CONFIG_HS_MIC_RECORD_NOISE_PD_CHG)
-	enum_switch_CHG_IC = CHG_TYPE_NONE;
-	#endif
-	/* 2021.01.21 longcheer jiangshitian change for mic noise end */
+	union power_supply_propval pval = {0, };
 
 	cancel_delayed_work_sync(&pdpm->pm_work);
 	usbpd_check_usb_psy(pdpm);
@@ -1723,6 +1557,8 @@ static void usbpd_pm_disconnect(struct usbpd_pm *pdpm)
 	pm_config.bat_volt_lp_lmt = pdpm->bat_volt_max;
 	memset(&pdpm->pdo, 0, sizeof(pdpm->pdo));
 	pm_config.bat_curr_lp_lmt = pdpm->bat_curr_max;
+
+	pval.intval = 0;
 	usbpd_pm_move_state(pdpm, PD_PM_STATE_ENTRY);
 }
 
@@ -2020,8 +1856,8 @@ static int usbpd_pm_remove(struct platform_device *pdev)
 {
 	power_supply_unreg_notifier(&__pdpm->nb);
 	cancel_delayed_work(&__pdpm->pm_work);
-	cancel_work(&__pdpm->cp_psy_change_work);
-	cancel_work(&__pdpm->usb_psy_change_work);
+	cancel_work_sync(&__pdpm->cp_psy_change_work);
+	cancel_work_sync(&__pdpm->usb_psy_change_work);
 
 	return 0;
 }

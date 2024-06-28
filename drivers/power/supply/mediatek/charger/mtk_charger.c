@@ -906,16 +906,7 @@ static int get_bq_psy(void)
 		return 0;
 
 	if (!pinfo->bq_psy) {
-		if(get_bq2597x_load_flag())
-		{
-			pr_info("get_bq_psy bq2597x-standalone\n");
-			pinfo->bq_psy = power_supply_get_by_name("bq2597x-standalone");
-		}
-		else if(get_ln8000_load_flag())
-		{
-			pr_info("get_bq_psy ln8000\n");
-			pinfo->bq_psy = power_supply_get_by_name("ln8000");
-		}
+		pinfo->bq_psy = power_supply_get_by_name("bq2597x-standalone");
 		if (!pinfo->bq_psy) {
 			pr_err("bq_psy not found\n");
 			return -1;

@@ -189,9 +189,6 @@
 #define BQ2597X_FSW_SET_375KHZ				3
 #define BQ2597X_FSW_SET_500KHZ				4
 #define BQ2597X_FSW_SET_750KHZ				5
-/* 2021.03.06 longcheer jiangshitian HMI_M306_A01-588 start */
-#define BQ2597X_FSW_SET_750KHZ_SC8851		7
-/* 2021.03.06 longcheer jiangshitian HMI_M306_A01-588 end */
 
 #define BQ2597X_WD_TIMEOUT_FLAG_MASK			0x08
 #define BQ2597X_WD_TIMEOUT_SHIFT			3
@@ -443,6 +440,7 @@
 #define BQ25968_DEVICE_ID				0x16
 #define BQ25970_DEVICE_ID				0x10
 #define SC8551_DEVICE_ID				0x00
+#define SC8551A_DEVICE_ID				0x51
 
 /* Register 14h */
 #define BQ2597X_REG_14					0x14

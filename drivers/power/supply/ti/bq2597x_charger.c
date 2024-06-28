@@ -2,7 +2,6 @@
  * BQ2570x battery charging driver
  *
  * Copyright (C) 2017 Texas Instruments *
- * Copyright (C) 2021 XiaoMi, Inc.
  * This package is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
@@ -68,7 +67,6 @@ static float sc8551_adc_lsb[] = {
 	[ADC_TBAT]	= SC8551_TSBAT_ADC_LSB,
 	[ADC_TDIE]	= SC8551_TDIE_ADC_LSB,
 };
-
 #define BYPASS_IN_DEFAULT_FCC_MA			3000
 #define BYPASS_OUT_DEFAULT_FCC_MA			3500
 
@@ -351,9 +349,10 @@ struct bq2597x {
 
 	int hv_charge_enable;
 	int bypass_mode_enable;
+
 };
 
-extern void set_bq2597x_load_flag(bool bqflag);
+static struct bq2597x *g_bq = NULL;
 
 /************************************************************************/
 static int __bq2597x_read_byte(struct bq2597x *bq, u8 reg, u8 *data)
@@ -497,11 +496,26 @@ EXPORT_SYMBOL_GPL(bq2597x_enable_charge);
 static int bq2597x_check_charge_enabled(struct bq2597x *bq, bool *enabled)
 {
 	int ret;
-	u8 val;
+	u8 val,val1;
 
 	ret = bq2597x_read_byte(bq, BQ2597X_REG_0C, &val);
-	if (!ret)
-		*enabled = !!(val & BQ2597X_CHG_EN_MASK);
+	if (!ret) {
+		ret = bq2597x_read_byte(bq,BQ2597X_REG_0A, &val1);
+		if (!ret) {
+			if ((val & BQ2597X_CHG_EN_MASK) && (val1 &  BQ2597X_CONV_SWITCHING_STAT_MASK)) {
+			*enabled = true;
+			pr_info("BQ2597X status: enabled\n");
+			return ret;
+			}
+		}
+		else {
+			pr_info("read BQ2597X_REG_0A error\n");
+		}
+	} else {
+		pr_info("read BQ2597X_REG_0C error\n");
+	}
+	*enabled = false;
+	pr_info("BQ2597X status: disabled\n");
 	return ret;
 }
 
@@ -1109,11 +1123,29 @@ static int bq2597x_get_adc_data(struct bq2597x *bq, int channel,  int *result)
 	*result = t;
 
 	if (bq->chip_vendor == SC8551) {
-		kernel_neon_begin();
-		*result = (int)(t * sc8551_adc_lsb[channel]);
-		kernel_neon_end();
+//		kernel_neon_begin();
+//		*result = (int)(t * sc8551_adc_lsb[channel]);  //ww_test_for_bring_up
+		if(channel == ADC_IBUS)
+			t = t * 15625/10000;
+		else if(channel == ADC_VBUS)
+			t = t * 375/100;
+		else if(channel == ADC_VAC)
+			t = t * 5;
+		else if(channel == ADC_VOUT)
+			t = t * 125/100;
+		else if(channel == ADC_VBAT)
+			t = t * 12575/10000;
+		else if(channel == ADC_IBAT)
+			t = t * 3125/1000;
+		else if(channel == ADC_TBUS)
+			t = t * 9766/100000;
+		else if(channel == ADC_TBAT)
+			t = t * 9766/100000;
+		else if(channel == ADC_TDIE)
+			t = t * 5/10;
+//		kernel_neon_end();
 	}
-
+	*result = t;
 	return 0;
 }
 EXPORT_SYMBOL_GPL(bq2597x_get_adc_data);
@@ -1513,7 +1545,7 @@ static int bq2597x_detect_device(struct bq2597x *bq)
 		bq->part_no = (data & BQ2597X_DEV_ID_MASK);
 		bq->part_no >>= BQ2597X_DEV_ID_SHIFT;
 
-		if (data == SC8551_DEVICE_ID)
+		if (data == SC8551_DEVICE_ID || data == SC8551A_DEVICE_ID)
 			bq->chip_vendor = SC8551;
 		else if (data == BQ25968_DEVICE_ID)
 			bq->chip_vendor = BQ25968;
@@ -1523,6 +1555,48 @@ static int bq2597x_detect_device(struct bq2597x *bq)
 
 	return ret;
 }
+
+/*longcheer nielianjie10 2023.02.16 get battery voltage start*/
+int bq2597x_get_battery_voltage(void)
+{
+	int ret = 0;
+	int result = 0;
+	struct bq2597x *bq = NULL;
+
+	if (IS_ERR_OR_NULL(g_bq)) {
+		pr_err("g_bq is NULL!\n");
+		return -EINVAL;
+	}
+
+	bq = g_bq;
+	ret = bq2597x_check_charge_enabled(bq, &bq->charge_enabled);
+	if (ret) {
+		bq_err("bq2597x_check_charge_enabled FAIL!\n");
+		return -EINVAL;
+	}
+
+	if (!bq->charge_enabled){
+		bq_err("bq->charge_enabled: %d, needn't get battery voltage for pump!\n",
+				bq->charge_enabled);
+		return -EINVAL;
+	}
+
+	ret = bq2597x_get_adc_data(bq, ADC_VBAT, &result);
+	if (!ret) {
+		bq->vbat_volt = result;
+		if ((bq->vbat_volt > 2800) && (bq->vbat_volt < 4800)) {
+			return bq->vbat_volt;
+		} else {
+			bq_err("Error get bq->vbat_volt : %d.\n", bq->vbat_volt);
+			return -EINVAL;
+		}
+	} else {
+		bq_err("bq2597x_get_adc_data FAIL!\n");
+		return -EINVAL;
+	}
+}
+EXPORT_SYMBOL_GPL(bq2597x_get_battery_voltage);
+/*longcheer nielianjie10 2023.02.16 get battery voltage end*/
 
 static int bq2597x_parse_dt(struct bq2597x *bq, struct device *dev)
 {
@@ -1872,63 +1946,9 @@ static int bq2597x_init_regulation(struct bq2597x *bq)
 	return 0;
 }
 
-/* 2021.03.06 longcheer jiangshitian HMI_M306_A01-588 start */
-static int bq2597x_set_fsw(struct bq2597x *bq, int value)
-{
-	int ret;
-	u8 val;
-
-	switch(value)
-	{
-		case 0:
-			val = BQ2597X_FSW_SET_187P5KHZ;
-		break;
-		case 1:
-			val = BQ2597X_FSW_SET_250KHZ;
-		break;
-		case 2:
-			val = BQ2597X_FSW_SET_300KHZ;
-		break;
-		case 3:
-			val = BQ2597X_FSW_SET_375KHZ;
-		break;
-		case 4:
-			val = BQ2597X_FSW_SET_500KHZ;
-		break;
-		case 5:
-		case 6:
-			val = BQ2597X_FSW_SET_750KHZ;
-		break;
-		case 7:
-			val = BQ2597X_FSW_SET_750KHZ_SC8851;
-		break;
-		defalut:
-			val = BQ2597X_FSW_SET_500KHZ;
-		break;
-	}
-
-	val <<= BQ2597X_FSW_SET_SHIFT;
-
-	ret = bq2597x_update_bits(bq, BQ2597X_REG_0B, BQ2597X_FSW_SET_MASK, val);
-
-	return ret;
-}
-/* 2021.03.06 longcheer jiangshitian HMI_M306_A01-588 end */
-
 static int bq2597x_init_device(struct bq2597x *bq)
 {
 	bq2597x_enable_wdt(bq, false);
-
-	/* 2021.03.06 longcheer jiangshitian HMI_M306_A01-588 start */
-	if(SC8551 == bq->chip_vendor)
-	{
-		bq2597x_set_fsw(bq, 7);
-	}
-	else if((BQ25968 == bq->chip_vendor) || (BQ25970 == bq->chip_vendor))
-	{
-		bq2597x_set_fsw(bq, 5);
-	}
-	/* 2021.03.06 longcheer jiangshitian HMI_M306_A01-588 end */
 
 	bq2597x_set_ss_timeout(bq, 100000);
 	bq2597x_set_ibus_ucp_thr(bq, 300);
@@ -2053,11 +2073,11 @@ static int bq2597x_charger_get_property(struct power_supply *psy,
 	int result;
 	int ret;
 	u8 reg_val;
-
 	switch (psp) {
 	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
 		bq2597x_check_charge_enabled(bq, &bq->charge_enabled);
 		val->intval = bq->charge_enabled;
+  		bq_info("get POWER_SUPPLY_PROP_CHARGING_ENABLED: %s\n",val->intval ? "enable" : "disable");
 		break;
 	case POWER_SUPPLY_PROP_STATUS:
 		val->intval = 0;
@@ -2181,6 +2201,11 @@ static int bq2597x_charger_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_TI_BUS_ERROR_STATUS:
 		val->intval = bq2597x_check_vbus_error_status(bq);
+		if(val->intval != VBUS_ERROR_NONE)
+		{
+			bq_info("POWER_SUPPLY_PROP_TI_BUS_ERROR_STATUS: %s\n",
+				(val->intval == VBUS_ERROR_LOW) ? "VBUS_ERROR_LOW" : "VBUS_ERROR_HIGH");
+		}
 		break;
 	case POWER_SUPPLY_PROP_TI_CHARGE_MODE:
 		val->intval = sc8551_get_charge_mode(bq);
@@ -2584,14 +2609,13 @@ static int bq2597x_charger_probe(struct i2c_client *client,
 	int ret;
 
 	bq_info("client->irq=%d", client->irq);
+	pr_err("%s: probe start\n", __func__);
 	ret = i2c_smbus_read_byte_data(client, BQ2597X_REG_13);
-	if (ret != BQ25968_DEVICE_ID && ret !=SC8551_DEVICE_ID && ret !=BQ25970_DEVICE_ID) {
-		bq_err("failed to communicate with chip\n");
+	if (ret != BQ25968_DEVICE_ID && ret !=SC8551_DEVICE_ID && ret !=BQ25970_DEVICE_ID && ret != SC8551A_DEVICE_ID) {
+		bq_err("failed to communicate with chip, ret:%d\n", ret);
 		return -ENODEV;
 	}
 	bq_info("bq device id=0x%x\n", ret);
-	set_bq2597x_load_flag(true);
-
 	bq = devm_kzalloc(&client->dev, sizeof(struct bq2597x), GFP_KERNEL);
 	if (!bq)
 		return -ENOMEM;
@@ -2669,10 +2693,13 @@ static int bq2597x_charger_probe(struct i2c_client *client,
 		goto err_1;
 	}
 
+	g_bq = bq;
+
 	/* determine_initial_status(bq); */
 
 	bq_info("bq2597x probe successfully, Part Num:%d, Chip Vendor:%d\n!",
 				bq->part_no, bq->chip_vendor);
+	pr_err("%s: probe done OK\n", __func__);
 
 	return 0;
 
