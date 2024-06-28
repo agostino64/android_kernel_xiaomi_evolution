@@ -5594,13 +5594,6 @@ page_owner=on loop.max_part=16";
 	#include "mediatek/bat_setting/mt6785_battery_table.dtsi"
 };
 
-&odm {
-	simtray {
-		compatible = "xiaomi,simtray-status";
-		status-gpio =	<&pio 140 0>;
-	};
-};
-
 &pio {
 	/* bq25970 */
 	bq2597x_int_default: bq2597x_int_default {
@@ -5668,46 +5661,6 @@ page_owner=on loop.max_part=16";
 		//sc8551,bypass-enable;
 		sc8551,ac-ovp-threshold = <13>;
 	};
-	ln8000_charger@51 {
-		compatible = "lionsemi,ln8000";
-		reg = <0x51>;
-		/* bank <bit-idx> <flags: active-low> */
-		//irq-gpios = <&tlmm 55 0x2002>;
-
-        ln8000_charger,irq_index = <35>;  /* please update index value */
-		//interrupt-parent = <&pio>;
-		//interrupts = <12 IRQ_TYPE_EDGE_FALLING 12 0>;
-		//pinctrl-names = "default";
-		//pinctrl-0 = <&bq2597x_int_default &bq2597x_int_suspend>;
-
-		/* device configuration */
-		ln8000_charger,bat-ovp-threshold = <4550>;
-		ln8000_charger,bat-ovp-alarm-threshold = <4525>;
-		ln8000_charger,bus-ovp-threshold = <13000>;
-		ln8000_charger,bus-ovp-alarm-threshold = <11000>;
-		ln8000_charger,bus-ocp-threshold = <3750>;
-		ln8000_charger,bus-ocp-alarm-threshold = <3500>;
-		ln8000_charger,ntc-alarm-cfg  = <226>;
-		/* protection enable/disable flags
-		 *   vbat-ovp-disable
-		 *   vbat-reg-disable
-		 *   iin-ocp-disable
-		 *   iin-reg-disable
-		 *   tbus-mon-disable
-		 *   tbat-mon-disable
-		 *   tdie-prot-disable
-		 *   tdie-reg-disable
-		 *   revcurr-prot-disable
-		 */
-		ln8000_charger,tdie-prot-disable;
-		ln8000_charger,tbus-mon-disable;
-		ln8000_charger,tbat-mon-disable;
-		ln8000_charger,iin-ocp-disable;
-		ln8000_charger,iin-reg-disable;
-		ln8000_charger,tdie-reg-disable;
-		ln8000_charger,vbat-reg-disable;
-	};
-
 };
 
 &cp_qc30 {
