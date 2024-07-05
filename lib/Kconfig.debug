@@ -343,27 +343,6 @@ config SECTION_MISMATCH_WARN_ONLY
 
 	  If unsure, say Y.
 
-#
-# Select this config option from the architecture Kconfig, if it
-# is preferred to always offer frame pointers as a config
-# option on the architecture (regardless of KERNEL_DEBUG):
-#
-config ARCH_WANT_FRAME_POINTERS
-	bool
-	help
-
-config FRAME_POINTER
-	bool "Compile the kernel with frame pointers"
-	depends on DEBUG_KERNEL && \
-		(CRIS || M68K || FRV || UML || \
-		 SUPERH || BLACKFIN || MN10300 || METAG) || \
-		ARCH_WANT_FRAME_POINTERS
-	default y if (DEBUG_INFO && UML) || ARCH_WANT_FRAME_POINTERS
-	help
-	  If you say Y here the resulting kernel image will be slightly
-	  larger and slower, but it gives very useful debugging information
-	  in case of kernel bugs. (precise oopses/stacktraces/warnings)
-
 config STACK_VALIDATION
 	bool "Compile-time stack metadata validation"
 	depends on HAVE_STACK_VALIDATION
